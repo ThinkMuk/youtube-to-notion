@@ -1,0 +1,12 @@
+# >=2026.7.4: VOD 다운로드가 web_embedded 클라이언트 + EJS(js_runtimes) 조합을
+# 요구한다. 구버전 기본 클라이언트의 미디어 URL은 2026년 현재 403으로 죽어 있다.
+yt-dlp>=2026.7.4
+yt-dlp-ejs>=0.8.0
+# >=1.1.0: transcriber가 hotwords 파라미터를 사용한다 (1.0.0에는 없음)
+faster-whisper>=1.1.0
+nvidia-cublas-cu12; platform_system == "Windows"
+nvidia-cudnn-cu12; platform_system == "Windows"
+anthropic>=0.40.0
+Pillow>=10.0.0
+requests>=2.31.0
+numpy>=1.24.0
