@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import json
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-_VALID_BACKENDS = ("gemini", "anthropic", "claude_code")
+_VALID_BACKENDS = ("gemini", "anthropic", "claude_code", "codex")
+_VALID_CODEX_EFFORTS = ("low", "medium", "high", "xhigh", "max")
 
 
 class ConfigError(Exception):
@@ -23,6 +25,8 @@ class Config:
     gemini_api_key: str = ""
     gemini_model: str = "gemini-flash-latest"
     claude_code_model: str = "haiku"
+    codex_model: str = "gpt-5.6-luna"
+    codex_reasoning_effort: str = "low"
     whisper_model: str = "medium"
     whisper_device: str = "auto"
     frame_interval_sec: float = 2.0
@@ -55,9 +59,7 @@ def app_dir() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
-def load_config() -> Config:
-    config_path = app_dir() / "config.json"
-
+def _read_config(config_path: Path) -> dict:
     if not config_path.exists():
         raise ConfigError(
             f"config.json 파일을 찾을 수 없습니다.\n"
@@ -66,10 +68,51 @@ def load_config() -> Config:
         )
 
     try:
-        raw = json.loads(config_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as e:
+        raw = json.loads(config_path.read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError) as e:
         raise ConfigError(f"config.json 파일의 형식이 올바르지 않습니다: {e}") from e
+    if not isinstance(raw, dict):
+        raise ConfigError("config.json 파일은 JSON 객체 형식이어야 합니다.")
+    return raw
 
+
+def load_config() -> Config:
+    return _parse_config(_read_config(app_dir() / "config.json"))
+
+
+def save_summarizer_backend(backend: str) -> Config:
+    """Persist a CLI selection without changing credentials or other settings."""
+    if backend not in ("claude_code", "codex"):
+        raise ConfigError("선택할 수 없는 요약 방식입니다.")
+    config_path = app_dir() / "config.json"
+    raw = _read_config(config_path)
+    raw["summarizer_backend"] = backend
+    try:
+        config = _parse_config(raw)
+    except (ValueError, TypeError) as e:
+        raise ConfigError(f"config.json 설정 값이 올바르지 않습니다: {e}") from e
+    temporary_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=config_path.parent,
+            prefix=".config-", suffix=".tmp", delete=False,
+        ) as stream:
+            temporary_path = Path(stream.name)
+            json.dump(raw, stream, ensure_ascii=False, indent=2)
+            stream.write("\n")
+        temporary_path.replace(config_path)
+    except OSError as e:
+        raise ConfigError(f"요약 방식 설정을 저장하지 못했습니다: {e}") from e
+    finally:
+        if temporary_path is not None and temporary_path.exists():
+            try:
+                temporary_path.unlink()
+            except OSError:
+                pass
+    return config
+
+
+def _parse_config(raw: dict) -> Config:
     required_keys = ["notion_token", "notion_parent_page_id"]
     missing = [k for k in required_keys if not raw.get(k)]
     if missing:
@@ -96,6 +139,18 @@ def load_config() -> Config:
             "anthropic_api_key가 비어 있습니다. Anthropic Console에서 발급받은 키를 입력해주세요."
         )
 
+    codex_model = raw.get("codex_model", "gpt-5.6-luna")
+    codex_effort = raw.get("codex_reasoning_effort", "low")
+    if backend == "codex":
+        if not isinstance(codex_model, str) or not codex_model.strip():
+            raise ConfigError("codex_model에는 사용할 모델명을 입력해주세요. 기본값: gpt-5.6-luna")
+        codex_model = codex_model.strip()
+        if codex_effort not in _VALID_CODEX_EFFORTS:
+            raise ConfigError(
+                "codex_reasoning_effort 값이 올바르지 않습니다. "
+                f"가능한 값: {', '.join(_VALID_CODEX_EFFORTS)} (기본값: low)"
+            )
+
     return Config(
         notion_token=raw["notion_token"],
         notion_parent_page_id=raw["notion_parent_page_id"],
@@ -104,6 +159,8 @@ def load_config() -> Config:
         gemini_api_key=raw.get("gemini_api_key", ""),
         gemini_model=raw.get("gemini_model", "gemini-flash-latest"),
         claude_code_model=raw.get("claude_code_model", "haiku"),
+        codex_model=codex_model,
+        codex_reasoning_effort=codex_effort,
         whisper_model=raw.get("whisper_model", "medium"),
         whisper_device=raw.get("whisper_device", "auto"),
         frame_interval_sec=float(raw.get("frame_interval_sec", 2.0)),
