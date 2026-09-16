@@ -2,7 +2,8 @@
 
 유튜브 라이브(또는 VOD) 강의를 실시간으로 시청하면서, 슬라이드가 바뀔 때마다 해당 슬라이드 이미지와
 강사 발화를 AI로 요약한 한국어 노트를 Notion 페이지에 자동으로 기록해주는 데스크톱 앱입니다.
-요약은 기본적으로 Google Gemini(무료 티어)를 사용하며, Anthropic(Claude) API로 전환할 수도 있습니다.
+요약은 Google Gemini·Anthropic API 또는 로그인된 Claude Code·Codex CLI를 사용합니다.
+제공되는 설정 예시는 Codex의 경량 모델 `gpt-5.6-luna`와 추론 수준 `low`로 구성되어 있습니다.
 
 > 🚀 **처음이라면 [GUIDE.md](GUIDE.md)를 먼저 보세요** — Windows 빌드부터 첫 강의 기록,
 > PC 이동까지 실사용 순서를 단계별로 안내합니다. 이 README는 기능·설정 레퍼런스입니다.
@@ -13,7 +14,7 @@
    캡처합니다. (녹화는 시작 버튼을 누른 시점부터 시작되며, 과거 방송 내용을 소급해서 가져오지 않습니다.)
 2. 일정 간격으로 프레임을 캡처해 화면(슬라이드) 변화를 감지합니다.
 3. 슬라이드가 바뀌면, 해당 슬라이드가 화면에 떠 있던 구간의 음성을 Whisper로 받아쓰고,
-   설정된 AI 백엔드(기본값 Gemini)로 한국어 불릿 요약을 생성한 뒤, 슬라이드 이미지와 함께 Notion 페이지에
+   선택한 AI 백엔드로 한국어 불릿 요약을 생성한 뒤, 슬라이드 이미지와 함께 Notion 페이지에
    추가합니다.
 4. **종료** 버튼을 누르면 마지막 슬라이드를 마무리하고, 전체 강의에 대한 종합 요약을
    Notion 페이지 맨 아래에 추가합니다. 이어서 모든 슬라이드의 Whisper 원문 스크립트를 모은
@@ -28,9 +29,9 @@
 
 ## 사전 준비물
 
-**Windows exe로 배포받은 최종 사용자**는 별도 설치가 필요 없습니다. Python, ffmpeg 모두
-`dist\YoutubeLiveNotion` 폴더 안에 동봉되어 있으며, 혹시 ffmpeg가 빠져 있더라도 첫 실행 시
-앱이 자동으로 다운로드합니다 (아래 "ffmpeg 자동 설치" 참고). `config.json`만 채워주면 됩니다.
+**Windows exe로 배포받은 최종 사용자**는 Python·Node.js·npm을 별도 설치할 필요가 없습니다.
+Python, ffmpeg, Codex CLI가 `dist\YoutubeLiveNotion` 폴더 안에 동봉됩니다.
+최초 사용 시 `config.json`의 Notion 값을 채우고 앱의 **Codex 로그인** 버튼으로 로그인하세요.
 
 개발 환경(`python -m yln`으로 소스 실행, 주로 macOS/Linux)에서는 아래가 필요합니다:
 
@@ -41,8 +42,8 @@
 - (권장) [deno](https://deno.com/) — 최신 yt-dlp는 유튜브 포맷 추출에 JS 런타임을 사용합니다.
   없어도 동작하는 경우가 많지만, 일부 화질/포맷이 누락되거나 추출이 실패하면 deno를 설치하세요.
 - Notion Integration (연동 앱) 생성 및 페이지 연결
-- Google AI Studio(Gemini) API 키 — 기본 요약 백엔드. 무료 티어로 사용 가능하며 신용카드 등록이 필요 없습니다.
-  (Anthropic API 키로 전환하고 싶다면 아래 "요약 백엔드 전환" 참고)
+- Codex를 사용할 수 있는 ChatGPT 계정 — 기본 배포 설정은 Codex입니다.
+  Gemini 또는 Anthropic API 백엔드를 선택하면 해당 서비스의 API 키가 필요합니다.
 
 ### ffmpeg 자동 설치 (Windows)
 
@@ -59,7 +60,7 @@ Windows exe는 다음 순서로 ffmpeg를 찾습니다: ① 실행 파일과 같
 3. 해당 페이지의 우측 상단 `...` 메뉴 → **연결 추가(Add connections)** 에서 방금 만든 Integration을 연결합니다.
 4. 부모 페이지 URL에서 페이지 ID(32자리 하이픈 포함/미포함 문자열)를 확인합니다.
 
-### Gemini API 키 발급 (기본 요약 백엔드)
+### Gemini API 키 발급 (API 백엔드 선택 시)
 
 1. https://aistudio.google.com/apikey 에 구글 계정으로 로그인합니다.
 2. **Create API key** 를 눌러 키를 발급받습니다. 신용카드 등록 없이 즉시 무료로 사용할 수 있습니다.
@@ -80,7 +81,7 @@ Claude Pro/Max 구독이 있다면 API 키 없이 구독 계정으로 요약할 
 
 1. Claude Code CLI 설치: PowerShell에서 `irm https://claude.ai/install.ps1 | iex`
 2. 터미널에서 `claude`를 실행하고 `/login`으로 한 번 로그인 (브라우저 인증)
-3. `config.json`의 `summarizer_backend`를 `"claude_code"`로 변경
+3. 앱의 요약 AI 토글에서 **Claude** 선택
 
 이 방식은 API 키가 전혀 필요 없고 토큰 단위 과금도 없습니다 (구독 요금제의 사용량 한도 적용).
 `claude_code_model`로 모델을 바꿀 수 있습니다 (`"haiku"` 기본값, `"sonnet"` 가능).
@@ -91,6 +92,48 @@ Claude Pro/Max 구독이 있다면 API 키 없이 구독 계정으로 요약할 
 로그인 정보와 CLI 프로그램 자체, 앱의 `config.json`(Notion 토큰·API 키), 녹화 캐시를 한 번에
 정리할 수 있습니다.
 
+### Codex로 요약하기 — Claude Code에서 전환
+
+기존 앱에서 진행 중인 기록을 **종료**하고 앱을 닫은 뒤, 변경된 소스로 `build.bat`을 실행하세요.
+스크립트가 공식 [`openai-codex-cli-bin==0.154.0`](https://pypi.org/project/openai-codex-cli-bin/0.154.0/)
+런타임을 설치하고 배포 폴더에 동봉합니다. **Node.js·npm·전역 Codex 설치는 필요 없습니다.**
+앱은 동봉된 고정 버전의 Codex를 우선 사용합니다.
+
+빌드 전에 기존 `dist\YoutubeLiveNotion\config.json`을 보존합니다. 해당 파일이 없으면
+프로젝트 루트의 `config.json`, 그것도 없으면 예시 파일을 사용합니다.
+이전 빌드가 실패해 `config.build-pending.json`이 남아 있으면 그 스냅샷부터 복구합니다.
+Notion 토큰·페이지 ID·전사 설정과 선택한 요약 AI를 보존합니다.
+새 설정의 기본값은 다음과 같으며, 기존 설정에 없는 모델 항목만 기본값으로 채웁니다.
+
+```json
+"summarizer_backend": "codex",
+"codex_model": "gpt-5.6-luna",
+"codex_reasoning_effort": "low"
+```
+
+`gpt-5.6-luna`는 현재 Codex에서 제공하는 경량 모델이며, `low`는 가벼운 추론 설정입니다.
+슬라이드 요약과 마지막 전체 강의 요약에 모두 적용됩니다.
+[공식 모델 안내](https://learn.chatgpt.com/docs/models)에서도 반복적인 구조화 요약에 Luna를 권장합니다.
+
+빌드 완료 후 앱을 실행하고 요약 AI 토글에서 **Codex**를 선택한 뒤 **Codex 로그인** 버튼을 누르세요.
+새 콘솔에서 ChatGPT 계정 로그인을 완료하면 됩니다. 이미 그 PC에서 Codex에 로그인했다면 기존 인증을 사용합니다.
+계정 인증은 배포 폴더에 포함하지 않으므로 다른 PC에서는 최초 한 번 로그인해야 합니다.
+전환 전 설정은 프로젝트 루트의 `config.build-backup.json`에 남습니다.
+처음 설정하는 PC라면 생성된 `config.json`의 Notion 값도 채워야 합니다.
+
+앱의 **초기화** 기능은 Codex 로그인 정보를 지우지 않습니다. 공용 PC에서 로그아웃하려면
+배포 폴더에서 `.\_internal\codex_cli_bin\bin\codex.exe logout`을 실행하세요.
+**Claude 로그인**과 **Codex 로그인** 버튼은 항상 함께 표시됩니다. 로그인과 별개로
+요약 AI 토글에서 사용할 백엔드를 선택하세요. 선택은 즉시 `config.json`에 저장되어
+다음 앱 실행과 재빌드 후에도 유지되며, 기록 중에는 토글이 잠깁니다.
+macOS/Linux 소스 실행에서는 별도로 설치된 Codex CLI와 기존 로그인을 사용합니다.
+
+Codex는 `exec` 비대화형 모드로 호출하며, 전사문을 표준입력으로 전달하고 최종 응답만 읽습니다.
+요약 호출은 임시 작업 폴더에서 실행하며 개인 Codex 설정의 MCP 연결을 불러오지 않습니다.
+기존 CLI 로그인과 실행 정책 규칙은 유지하고, 전역 Codex 설정은 수정하지 않습니다.
+호출당 제한 시간은 180초이며 실패 시 최대 두 번 더 시도합니다.
+인증 오류가 나면 **Codex 로그인** 버튼으로 로그인 상태를 확인하세요.
+
 ## config.json 설정
 
 `config.json.example` 파일을 복사해 `config.json`으로 이름을 바꾸고 값을 채워주세요.
@@ -99,10 +142,13 @@ Claude Pro/Max 구독이 있다면 API 키 없이 구독 계정으로 요약할 
 {
   "notion_token": "secret_xxx_your_notion_integration_token",
   "notion_parent_page_id": "your-notion-parent-page-id",
-  "summarizer_backend": "gemini",
-  "gemini_api_key": "AIzaSy-xxx-your-google-ai-studio-key",
+  "summarizer_backend": "codex",
+  "gemini_api_key": "",
   "gemini_model": "gemini-flash-latest",
   "anthropic_api_key": "",
+  "claude_code_model": "haiku",
+  "codex_model": "gpt-5.6-luna",
+  "codex_reasoning_effort": "low",
   "whisper_model": "medium",
   "whisper_device": "auto",
   "frame_interval_sec": 2.0,
@@ -119,8 +165,12 @@ Claude Pro/Max 구독이 있다면 API 키 없이 구독 계정으로 요약할 
 }
 ```
 
-- `summarizer_backend`: `"gemini"`(기본값), `"anthropic"`, 또는 `"claude_code"`. API 백엔드는
-  해당 API 키만 채우면 되고, `claude_code`는 키 없이 로그인된 Claude Code CLI를 사용합니다.
+- `summarizer_backend`: `"gemini"`, `"anthropic"`, `"claude_code"`, `"codex"`.
+  설정 예시는 `codex`이며, 기존 설정에서 이 항목을 생략하면 `gemini`를 사용합니다.
+  API 백엔드는 해당 API 키가 필요하고, CLI 백엔드는 각 CLI의 기존 로그인 정보를 사용합니다.
+- `codex_model`: 기본값 `gpt-5.6-luna`. 해당 계정에서 지원하는 Codex 모델명으로 변경할 수 있습니다.
+- `codex_reasoning_effort`: 기본값 `low`. `low`, `medium`, `high`, `xhigh`, `max` 중 선택하며
+  지정한 모델이 해당 수준을 지원해야 합니다.
 - `gemini_model`: 기본값 `gemini-flash-latest`. 필요시 다른 Gemini 모델명으로 바꿀 수 있습니다.
 - `whisper_model`: `tiny`, `base`, `small`, `medium`, `large-v3` 등. 사양이 낮은 PC라면
   `small`이나 `base`를 권장합니다. `medium`은 정확도가 높지만 첫 실행 시 약 1.5GB를 다운로드합니다.
@@ -168,27 +218,28 @@ Windows 환경에서:
 build.bat
 ```
 
-이 스크립트는 가상환경을 만들고, 의존성과 PyInstaller를 설치한 뒤 `youtube-live-notion.spec`으로
-빌드를 수행합니다. 이어서 `dist\YoutubeLiveNotion\` 폴더에 ffmpeg.exe가 없으면 자동으로
-다운로드해 동봉하고, `config.json.example`도 함께 복사합니다. 즉 빌드가 끝나면
-`dist\YoutubeLiveNotion\` 폴더 자체가 실행 파일 + ffmpeg가 모두 갖춰진 배포 가능한 상태가 됩니다.
+이 스크립트는 가상환경을 만들고, 의존성·고정 버전 Codex 런타임·PyInstaller를 설치한 뒤
+`youtube-live-notion.spec`으로 빌드합니다. Codex 실행 파일과 보조 파일을 함께 동봉하고,
+빌드된 Codex의 `--version` 실행이 실패하면 빌드를 중단합니다. ffmpeg·deno도 배포 폴더에 준비합니다.
+기존 설정과 요약 AI 선택은 보존하고 `config.json.example`도 함께 복사합니다.
 
-남은 일은 `config.json.example`을 `config.json`으로 복사해 실제 키 값을 채우는 것뿐입니다.
-이후 `YoutubeLiveNotion.exe`를 더블클릭하면 실행됩니다. (ffmpeg 동봉에 실패했거나 다른 버전을
+앱의 토글에서 사용할 AI를 선택하고 해당 로그인 버튼으로 인증하세요. 처음 설정한다면 생성된 `config.json`의
+Notion 값을 채운 뒤 `YoutubeLiveNotion.exe`를 실행하세요. (ffmpeg 동봉에 실패했거나 다른 버전을
 쓰고 싶다면, 앱이 첫 실행 시 자동으로 다운로드를 시도하거나, 위 "ffmpeg 자동 설치" 순서대로
 직접 넣어주셔도 됩니다.)
 
 ## 포터블 폴더로 다른 PC에서 실행하기
 
-빌드된 `dist\YoutubeLiveNotion` 폴더는 그 자체로 포터블합니다 (build.bat이 ffmpeg.exe까지
-자동으로 동봉해줍니다). 아래 구성이 갖춰진 폴더를 통째로 복사하면 새 PC에 설치 과정 없이
-바로 실행할 수 있습니다.
+빌드된 `dist\YoutubeLiveNotion` 폴더에는 ffmpeg와 Codex 런타임까지 포함됩니다.
+아래 폴더를 통째로 복사하면 새 PC에 별도 프로그램 설치 없이 실행할 수 있습니다.
+Codex 계정은 앱의 **Codex 로그인** 버튼으로 새 PC에서 최초 한 번 로그인하세요.
 
 ```
 YoutubeLiveNotion/
   YoutubeLiveNotion.exe
   ffmpeg.exe
   config.json
+  _internal/codex_cli_bin/  <- 고정 버전 Codex와 보조 실행 파일
   models/            <- Whisper 모델 캐시 (첫 실행 후 자동 생성됨)
   ...
 ```

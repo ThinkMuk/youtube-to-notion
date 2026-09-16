@@ -17,6 +17,7 @@ README가 기능·설정 레퍼런스라면, 이 문서는 **"Windows에서 빌�
 | 1    | `=== YoutubeLiveNotion Windows build ===` → 가상환경(.venv) 생성 | ~30초     |
 | 2    | pip 의존성 설치 로그 (faster-whisper, yt-dlp 등 수십 줄)         | 2~5분     |
 | 3    | PyInstaller 빌드 로그 (`INFO: ...` 수백 줄)                      | 2~5분     |
+|      | `=== Checking bundled Codex CLI ===` → `codex-cli 0.154.0` 확인  | —         |
 | 4    | `=== ffmpeg 동봉 중 (최초 빌드 시 다운로드, 약 80MB)... ===`     | ~1분      |
 | 5    | `=== 빌드 완료 ===` 안내 후 아무 키나 누르면 종료                | —         |
 
@@ -26,6 +27,8 @@ README가 기능·설정 레퍼런스라면, 이 문서는 **"Windows에서 빌�
 dist\YoutubeLiveNotion\
   YoutubeLiveNotion.exe   ← 실행 파일 (Python 내장)
   ffmpeg.exe              ← 자동 동봉됨
+  _internal/codex_cli_bin/ ← Codex 0.154.0 런타임 (자동 동봉됨)
+  config.json             ← 기존 설정과 요약 AI 선택 보존
   config.json.example     ← 설정 템플릿
   ...
 ```
@@ -34,18 +37,26 @@ dist\YoutubeLiveNotion\
 
 ### 빌드 직후 딱 한 번 할 일
 
-`config.json.example`을 복사해 `config.json`으로 이름을 바꾸고 키를 채웁니다.
-이미 키가 채워진 `config.json`이 있다면(예: 개발 환경의 것) 그대로 폴더에 복사하면 끝입니다.
+기존 사용자는 `config.json`의 Notion·전사 설정이 빌드 과정에서 보존됩니다.
+선택한 요약 AI는 재빌드 후에도 유지됩니다. 새 설정은 **Codex / gpt-5.6-luna / low**로 시작합니다.
+처음 설정한다면 자동 생성된 `config.json`의 Notion 값만 채우세요.
 
 ```json
 {
   "notion_token": "ntn_...",                          ← Notion 통합 토큰
   "notion_parent_page_id": "3a2a77ff...",             ← 기록할 부모 페이지 ID
-  "summarizer_backend": "gemini",
-  "gemini_api_key": "...",                            ← Google AI Studio 키 (무료)
+  "summarizer_backend": "codex",
+  "codex_model": "gpt-5.6-luna",
+  "codex_reasoning_effort": "low",
   ...
 }
 ```
+
+앱에는 **Claude 로그인**과 **Codex 로그인** 버튼이 모두 있습니다.
+사용할 계정으로 로그인한 뒤, 요약 AI 토글에서 **Claude / Codex**를 선택하세요.
+선택은 자동 저장되고 다음 실행에도 유지됩니다. 기록 중에는 AI를 전환할 수 없습니다.
+Codex는 이미 해당 PC에 로그인했다면 기존 인증을 사용하며, Node.js·npm 설치나 API 키는 필요 없습니다.
+Claude CLI가 없는 PC에서는 **Claude 로그인** 버튼이 설치 과정을 안내합니다.
 
 ### 첫 실행 시 흔한 현상 (정상)
 
