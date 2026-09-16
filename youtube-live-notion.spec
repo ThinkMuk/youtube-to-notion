@@ -12,7 +12,9 @@ hiddenimports = []
 # yt_dlp_ejs ships the YouTube n-challenge solver as package data
 # (yt/solver/*.min.js) that yt-dlp loads at runtime; without collecting it the
 # frozen exe silently falls back to 360p-only VOD downloads.
-for pkg in ("faster_whisper", "ctranslate2", "yt_dlp_ejs"):
+# codex_cli_bin includes the native CLI, its helper executables and package
+# manifest. Preserve the complete package layout for bundled_codex_path().
+for pkg in ("faster_whisper", "ctranslate2", "yt_dlp_ejs", "codex_cli_bin"):
     pkg_datas, pkg_binaries, pkg_hiddenimports = collect_all(pkg)
     datas += pkg_datas
     binaries += pkg_binaries

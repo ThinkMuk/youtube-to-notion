@@ -47,6 +47,20 @@ if errorlevel 1 (
     exit /b 1
 )
 pip install pyinstaller
+if errorlevel 1 (
+    echo [ERROR] PyInstaller install failed.
+    pause
+    exit /b 1
+)
+
+rem Preserve the active exe-side config before PyInstaller replaces dist.
+rem A pending snapshot survives failed builds; never print its credentials.
+python -m yln.build_support prepare
+if errorlevel 1 (
+    echo [ERROR] Could not preserve the existing app settings. Build stopped.
+    pause
+    exit /b 1
+)
 
 rem PyInstaller wipes the dist folder on rebuild, taking the downloaded Whisper
 rem model cache (models\, ~1.5GB) with it and forcing a re-download on the next
@@ -65,6 +79,17 @@ if errorlevel 1 (
 )
 
 set DIST_DIR=dist\YoutubeLiveNotion
+
+rem The pinned official Python runtime is bundled by the PyInstaller spec.
+rem Verify the actual packaged executable, not a global CLI found on PATH.
+echo.
+echo === Checking bundled Codex CLI ===
+"%DIST_DIR%\_internal\codex_cli_bin\bin\codex.exe" --version
+if errorlevel 1 (
+    echo [ERROR] Bundled Codex CLI is missing or cannot start. Build stopped.
+    pause
+    exit /b 1
+)
 
 if exist "models_backup_tmp" (
     move "models_backup_tmp" "dist\YoutubeLiveNotion\models" >nul
@@ -109,30 +134,24 @@ if exist config.json.example (
     copy /y config.json.example "%DIST_DIR%\config.json.example"
 )
 
-rem PyInstaller wipes the dist folder on rebuild, taking the user's filled-in
-rem config.json with it - restore it from the project root copy if we have one.
-if exist config.json (
-    copy /y config.json "%DIST_DIR%\config.json"
-)
-
-rem The claude_code summarizer backend needs the Claude Code CLI installed
-rem and logged in separately - this is optional and not auto-installed here.
-if not exist "%USERPROFILE%\.local\bin\claude.exe" (
-    where claude >nul 2>nul
-    if errorlevel 1 (
-        echo.
-        echo === NOTE: Claude Code CLI not found ===
-        echo The claude_code summarizer backend requires the Claude Code CLI.
-        echo Install it with: irm https://claude.ai/install.ps1 ^| iex
-        echo Then log in once by running claude, or use the app's Claude Login button.
-    )
+rem Restore settings and keep the selected backend; new configs default to Codex.
+python -m yln.build_support restore
+if errorlevel 1 (
+    echo [ERROR] Could not restore app settings. The pending backup is preserved.
+    pause
+    exit /b 1
 )
 
 echo.
 echo === Build complete ===
-echo The dist\YoutubeLiveNotion folder now contains the executable and ffmpeg.exe.
-echo Copy this whole folder to run it on another PC without any separate install.
-echo ^(Copy config.json.example to config.json and fill in your actual key values.^)
+echo The dist\YoutubeLiveNotion folder includes the app, ffmpeg and Codex CLI.
+echo Existing AI selection, Notion and transcription settings have been preserved.
+echo Choose Claude or Codex using the toggle in the app.
+echo New configs default to Codex gpt-5.6-luna / reasoning: low.
+echo Copy the whole folder to another PC; Node.js and npm are not required.
+echo Use the app's login button for the selected AI once on each new PC.
+echo For a first setup, fill in the Notion values in dist\YoutubeLiveNotion\config.json.
+echo Original settings backup: config.build-backup.json
 echo.
 
 endlocal

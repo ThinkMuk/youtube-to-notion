@@ -7,6 +7,8 @@ faster-whisper>=1.1.0
 nvidia-cublas-cu12; platform_system == "Windows"
 nvidia-cudnn-cu12; platform_system == "Windows"
 anthropic>=0.40.0
+# Bundle the same official Codex runtime on every Windows build; no Node/npm needed.
+openai-codex-cli-bin==0.154.0; platform_system == "Windows"
 Pillow>=10.0.0
 requests>=2.31.0
 numpy>=1.24.0
