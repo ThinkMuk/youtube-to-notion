@@ -1,273 +1,267 @@
-# YouTube Live → Notion 강의 노트
+# YouTube Live → Notion
 
-유튜브 라이브(또는 VOD) 강의를 실시간으로 시청하면서, 슬라이드가 바뀔 때마다 해당 슬라이드 이미지와
-강사 발화를 AI로 요약한 한국어 노트를 Notion 페이지에 자동으로 기록해주는 데스크톱 앱입니다.
-요약은 Google Gemini·Anthropic API 또는 로그인된 Claude Code·Codex CLI를 사용합니다.
-제공되는 설정 예시는 Codex의 경량 모델 `gpt-5.6-luna`와 추론 수준 `low`로 구성되어 있습니다.
+유튜브 강의의 슬라이드와 음성을 분석해 **슬라이드 이미지, 한국어 요약, 전체 스크립트**를 Notion에 기록하는 데스크톱 앱입니다.
 
-> 🚀 **처음이라면 [GUIDE.md](GUIDE.md)를 먼저 보세요** — Windows 빌드부터 첫 강의 기록,
-> PC 이동까지 실사용 순서를 단계별로 안내합니다. 이 README는 기능·설정 레퍼런스입니다.
+업로드된 녹화 영상(VOD)과 라이브 URL을 지원하며, 브라우저 재생과 독립적으로 동작합니다. 음성은 로컬 Whisper로 전사하고, 요약은 Codex·Claude Code·Gemini API·Anthropic API 중 선택한 백엔드가 처리합니다.
 
-## 동작 방식
+새 설정은 **Codex / `gpt-5.6-luna` / `low`**를 사용합니다. Windows 배포본에는 Python 실행 환경과 Codex CLI가 포함되며, 빌드 과정에서 ffmpeg와 Deno도 준비합니다.
 
-1. 유튜브 URL을 입력하고 **시작** 버튼을 누르면, `yt-dlp`로 스트림 주소를 얻고 `ffmpeg`로 영상/음성을
-   캡처합니다. (녹화는 시작 버튼을 누른 시점부터 시작되며, 과거 방송 내용을 소급해서 가져오지 않습니다.)
-2. 일정 간격으로 프레임을 캡처해 화면(슬라이드) 변화를 감지합니다.
-3. 슬라이드가 바뀌면, 해당 슬라이드가 화면에 떠 있던 구간의 음성을 Whisper로 받아쓰고,
-   선택한 AI 백엔드로 한국어 불릿 요약을 생성한 뒤, 슬라이드 이미지와 함께 Notion 페이지에
-   추가합니다.
-4. **종료** 버튼을 누르면 마지막 슬라이드를 마무리하고, 전체 강의에 대한 종합 요약을
-   Notion 페이지 맨 아래에 추가합니다. 이어서 모든 슬라이드의 Whisper 원문 스크립트를 모은
-   하위 페이지("📜 전체 스크립트")를 만들어 요약이 부실하거나 잘못된 경우를 대비한 백업 기록을 남긴 뒤
-   세션을 마칩니다.
+## 주요 기능
 
-슬라이드 전환이 감지될 때마다 곧바로 발행하지는 않습니다. 빠른 슬라이드 넘김, 코드 스크롤, 발화 없는
-화면 전환처럼 요약할 내용이 부족한 구간은 즉시 올리지 않고 내부적으로 누적(carry-over)해두었다가,
-이어지는 화면과 합쳐 이미지 여러 장 + 통합 요약으로 이루어진 하나의 섹션으로 Notion에 기록합니다.
-발화가 전혀 없던 구간은 별도 섹션을 만들지 않고 스크린샷만 직전 섹션에 덧붙이며, 이 경우 "요약을
-만들지 못했다"는 식의 실패 문구도 발행되지 않습니다.
+- **슬라이드 감지와 구간 병합** — 화면 변화를 감지하고, 짧거나 발화가 적은 구간은 다음 화면과 묶어 기록합니다.
+- **강의 음성 전사** — 한국어 음성을 Whisper로 받아씁니다. 입력한 주제 키워드를 전사와 요약에 참고합니다.
+- **Notion 자동 기록** — 강의별 페이지에 이미지와 구간 요약을 추가하고, 종료 시 전체 요약과 스크립트 하위 페이지를 만듭니다.
+- **VOD 시작 위치 지정** — 처음부터 또는 지정한 시간부터 분석합니다.
+- **요약 AI 전환** — 앱에서 Claude / Codex를 선택하면 즉시 저장되며, 다음 실행과 재빌드 후에도 유지됩니다.
+- **Windows 폴더 배포** — 실행 파일과 의존성, 설정, Whisper 모델 캐시를 폴더째 옮길 수 있습니다.
 
-## 사전 준비물
+## 빠른 시작 — Windows 배포본
 
-**Windows exe로 배포받은 최종 사용자**는 Python·Node.js·npm을 별도 설치할 필요가 없습니다.
-Python, ffmpeg, Codex CLI가 `dist\YoutubeLiveNotion` 폴더 안에 동봉됩니다.
-최초 사용 시 `config.json`의 Notion 값을 채우고 앱의 **Codex 로그인** 버튼으로 로그인하세요.
+### 1. 배포 폴더 준비
 
-개발 환경(`python -m yln`으로 소스 실행, 주로 macOS/Linux)에서는 아래가 필요합니다:
+`YoutubeLiveNotion.exe`가 들어 있는 **폴더 전체**를 준비하세요. Codex를 사용하는 배포본은 Python·Node.js·npm을 따로 설치할 필요가 없습니다.
 
-- Python 3.11 이상
-- [ffmpeg](https://ffmpeg.org/download.html) — PATH에 등록되어 있어야 합니다 (macOS는
-  `brew install ffmpeg`). 자동 다운로드 기능은 Windows 전용이므로, macOS/Linux 개발 환경에서는
-  시스템 ffmpeg가 필요합니다.
-- (권장) [deno](https://deno.com/) — 최신 yt-dlp는 유튜브 포맷 추출에 JS 런타임을 사용합니다.
-  없어도 동작하는 경우가 많지만, 일부 화질/포맷이 누락되거나 추출이 실패하면 deno를 설치하세요.
-- Notion Integration (연동 앱) 생성 및 페이지 연결
-- Codex를 사용할 수 있는 ChatGPT 계정 — 기본 배포 설정은 Codex입니다.
-  Gemini 또는 Anthropic API 백엔드를 선택하면 해당 서비스의 API 키가 필요합니다.
+소스만 있다면 [Windows 빌드](#windows-빌드)를 먼저 진행합니다.
 
-### ffmpeg 자동 설치 (Windows)
+### 2. Notion 연결
 
-Windows exe는 다음 순서로 ffmpeg를 찾습니다: ① 실행 파일과 같은 폴더의 `ffmpeg.exe`
-(빌드 시 자동 동봉됨) → ② `bin\ffmpeg.exe` → ③ 시스템 PATH → ④ 위 어디에도 없으면
-[gyan.dev](https://www.gyan.dev/ffmpeg/builds/) 빌드를 자동으로 다운로드해 `bin\ffmpeg.exe`에
-설치합니다 (최초 1회, 약 80MB, 상태 표시줄에 진행 상황이 표시됩니다). 즉, 정상적으로 빌드된
-배포본이라면 사용자가 ffmpeg를 신경 쓸 필요가 없습니다.
+1. [Notion Integration 설정](https://www.notion.so/my-integrations)에서 연동 앱을 만들고 토큰을 발급받습니다.
+2. 강의 노트를 모을 부모 페이지를 만들고, 해당 페이지에 연동 앱을 연결합니다.
+3. 부모 페이지 URL에서 페이지 ID를 확인합니다.
+4. 실행 파일과 같은 폴더의 `config.json`에 `notion_token`과 `notion_parent_page_id`를 입력합니다.
 
-### Notion 연동 앱 만들기
-
-1. https://www.notion.so/my-integrations 에서 새 Integration을 생성하고, "Internal Integration Token"을 복사해둡니다.
-2. 강의 노트를 기록할 상위 페이지(부모 페이지)를 Notion에서 만듭니다.
-3. 해당 페이지의 우측 상단 `...` 메뉴 → **연결 추가(Add connections)** 에서 방금 만든 Integration을 연결합니다.
-4. 부모 페이지 URL에서 페이지 ID(32자리 하이픈 포함/미포함 문자열)를 확인합니다.
-
-### Gemini API 키 발급 (API 백엔드 선택 시)
-
-1. https://aistudio.google.com/apikey 에 구글 계정으로 로그인합니다.
-2. **Create API key** 를 눌러 키를 발급받습니다. 신용카드 등록 없이 즉시 무료로 사용할 수 있습니다.
-3. 무료 티어 한도는 모델에 따라 다르지만 대략 분당 10회(10 RPM), 일 1,500회(1,500 RPD) 수준입니다.
-   슬라이드 전환마다 1회씩 호출되므로 대부분의 강의 시청에는 충분하지만, 한도 초과 시 앱이 자동으로
-   재시도(백오프)합니다.
-4. 발급받은 키를 `config.json`의 `gemini_api_key`에 넣습니다.
-
-### 요약 백엔드 전환 (선택 사항: Anthropic/Claude 사용하기)
-
-`config.json`의 `summarizer_backend`를 `"anthropic"`으로 바꾸고, `anthropic_api_key`에
-https://console.anthropic.com 에서 발급받은 키를 넣으면 Claude로 요약합니다. 이 경우
-`gemini_api_key`는 비워둬도 됩니다.
-
-### 요약 백엔드 전환 (선택 사항: Claude 구독으로 사용하기 — API 키 불필요)
-
-Claude Pro/Max 구독이 있다면 API 키 없이 구독 계정으로 요약할 수 있습니다.
-
-1. Claude Code CLI 설치: PowerShell에서 `irm https://claude.ai/install.ps1 | iex`
-2. 터미널에서 `claude`를 실행하고 `/login`으로 한 번 로그인 (브라우저 인증)
-3. 앱의 요약 AI 토글에서 **Claude** 선택
-
-이 방식은 API 키가 전혀 필요 없고 토큰 단위 과금도 없습니다 (구독 요금제의 사용량 한도 적용).
-`claude_code_model`로 모델을 바꿀 수 있습니다 (`"haiku"` 기본값, `"sonnet"` 가능).
-
-앱 화면 우측의 **"Claude 로그인"** 버튼을 누르면 위 1~2단계를 대신해줍니다: CLI가 설치되어
-있지 않으면 설치 창(PowerShell)을 열어주고, 설치되어 있으면 새 콘솔 창을 열어 `/login` 흐름으로
-로그인할 수 있게 해줍니다. 실습실/공용 PC 등에서 사용을 마친 뒤에는 **"초기화"** 버튼으로 Claude CLI
-로그인 정보와 CLI 프로그램 자체, 앱의 `config.json`(Notion 토큰·API 키), 녹화 캐시를 한 번에
-정리할 수 있습니다.
-
-### Codex로 요약하기 — Claude Code에서 전환
-
-기존 앱에서 진행 중인 기록을 **종료**하고 앱을 닫은 뒤, 변경된 소스로 `build.bat`을 실행하세요.
-스크립트가 공식 [`openai-codex-cli-bin==0.154.0`](https://pypi.org/project/openai-codex-cli-bin/0.154.0/)
-런타임을 설치하고 배포 폴더에 동봉합니다. **Node.js·npm·전역 Codex 설치는 필요 없습니다.**
-앱은 동봉된 고정 버전의 Codex를 우선 사용합니다.
-
-빌드 전에 기존 `dist\YoutubeLiveNotion\config.json`을 보존합니다. 해당 파일이 없으면
-프로젝트 루트의 `config.json`, 그것도 없으면 예시 파일을 사용합니다.
-이전 빌드가 실패해 `config.build-pending.json`이 남아 있으면 그 스냅샷부터 복구합니다.
-Notion 토큰·페이지 ID·전사 설정과 선택한 요약 AI를 보존합니다.
-새 설정의 기본값은 다음과 같으며, 기존 설정에 없는 모델 항목만 기본값으로 채웁니다.
-
-```json
-"summarizer_backend": "codex",
-"codex_model": "gpt-5.6-luna",
-"codex_reasoning_effort": "low"
-```
-
-`gpt-5.6-luna`는 현재 Codex에서 제공하는 경량 모델이며, `low`는 가벼운 추론 설정입니다.
-슬라이드 요약과 마지막 전체 강의 요약에 모두 적용됩니다.
-[공식 모델 안내](https://learn.chatgpt.com/docs/models)에서도 반복적인 구조화 요약에 Luna를 권장합니다.
-
-빌드 완료 후 앱을 실행하고 요약 AI 토글에서 **Codex**를 선택한 뒤 **Codex 로그인** 버튼을 누르세요.
-새 콘솔에서 ChatGPT 계정 로그인을 완료하면 됩니다. 이미 그 PC에서 Codex에 로그인했다면 기존 인증을 사용합니다.
-계정 인증은 배포 폴더에 포함하지 않으므로 다른 PC에서는 최초 한 번 로그인해야 합니다.
-전환 전 설정은 프로젝트 루트의 `config.build-backup.json`에 남습니다.
-처음 설정하는 PC라면 생성된 `config.json`의 Notion 값도 채워야 합니다.
-
-앱의 **초기화** 기능은 Codex 로그인 정보를 지우지 않습니다. 공용 PC에서 로그아웃하려면
-배포 폴더에서 `.\_internal\codex_cli_bin\bin\codex.exe logout`을 실행하세요.
-**Claude 로그인**과 **Codex 로그인** 버튼은 항상 함께 표시됩니다. 로그인과 별개로
-요약 AI 토글에서 사용할 백엔드를 선택하세요. 선택은 즉시 `config.json`에 저장되어
-다음 앱 실행과 재빌드 후에도 유지되며, 기록 중에는 토글이 잠깁니다.
-macOS/Linux 소스 실행에서는 별도로 설치된 Codex CLI와 기존 로그인을 사용합니다.
-
-Codex는 `exec` 비대화형 모드로 호출하며, 전사문을 표준입력으로 전달하고 최종 응답만 읽습니다.
-요약 호출은 임시 작업 폴더에서 실행하며 개인 Codex 설정의 MCP 연결을 불러오지 않습니다.
-기존 CLI 로그인과 실행 정책 규칙은 유지하고, 전역 Codex 설정은 수정하지 않습니다.
-호출당 제한 시간은 180초이며 실패 시 최대 두 번 더 시도합니다.
-인증 오류가 나면 **Codex 로그인** 버튼으로 로그인 상태를 확인하세요.
-
-## config.json 설정
-
-`config.json.example` 파일을 복사해 `config.json`으로 이름을 바꾸고 값을 채워주세요.
+설정 파일이 없다면 [config.json.example](config.json.example)을 복사해 `config.json`으로 저장하세요. Codex를 사용할 때 필요한 최소 설정은 다음과 같습니다.
 
 ```json
 {
-  "notion_token": "secret_xxx_your_notion_integration_token",
+  "notion_token": "ntn_xxx_your_notion_integration_token",
   "notion_parent_page_id": "your-notion-parent-page-id",
   "summarizer_backend": "codex",
-  "gemini_api_key": "",
-  "gemini_model": "gemini-flash-latest",
-  "anthropic_api_key": "",
-  "claude_code_model": "haiku",
   "codex_model": "gpt-5.6-luna",
-  "codex_reasoning_effort": "low",
-  "whisper_model": "medium",
-  "whisper_device": "auto",
-  "frame_interval_sec": 2.0,
-  "change_ratio": 0.5,
-  "debounce": 3,
-  "min_slide_duration_sec": 15.0,
-  "min_transcript_chars": 30,
-  "substantial_chars": 120,
-  "max_merged_segments": 6,
-  "max_merged_duration_sec": 300.0,
-  "max_images_per_section": 4,
-  "audio_flush_timeout_sec": 5.0,
-  "idle_flush_sec": 90.0
+  "codex_reasoning_effort": "low"
 }
 ```
 
-- `summarizer_backend`: `"gemini"`, `"anthropic"`, `"claude_code"`, `"codex"`.
-  설정 예시는 `codex`이며, 기존 설정에서 이 항목을 생략하면 `gemini`를 사용합니다.
-  API 백엔드는 해당 API 키가 필요하고, CLI 백엔드는 각 CLI의 기존 로그인 정보를 사용합니다.
-- `codex_model`: 기본값 `gpt-5.6-luna`. 해당 계정에서 지원하는 Codex 모델명으로 변경할 수 있습니다.
-- `codex_reasoning_effort`: 기본값 `low`. `low`, `medium`, `high`, `xhigh`, `max` 중 선택하며
-  지정한 모델이 해당 수준을 지원해야 합니다.
-- `gemini_model`: 기본값 `gemini-flash-latest`. 필요시 다른 Gemini 모델명으로 바꿀 수 있습니다.
-- `whisper_model`: `tiny`, `base`, `small`, `medium`, `large-v3` 등. 사양이 낮은 PC라면
-  `small`이나 `base`를 권장합니다. `medium`은 정확도가 높지만 첫 실행 시 약 1.5GB를 다운로드합니다.
-- `whisper_device`: `auto`, `cpu`, `cuda` 중 선택. `auto`는 GPU(NVIDIA CUDA)를 우선 시도하고,
-  CUDA 런타임 라이브러리(cuBLAS/cuDNN)가 설치되어 있지 않으면 자동으로 `cpu`로 전환됩니다.
-  GPU가 없거나 CUDA를 설치하지 않은 PC라면 처음부터 `cpu`로 지정해도 됩니다.
-- `frame_interval_sec`: 프레임 캡처 간격(초). 값이 작을수록 슬라이드 전환 감지가 빠르지만 CPU 사용량이 늘어납니다.
-- `change_ratio`: 슬라이드 전환으로 판단할 화면 변화 비율(0.0~1.0, 기본 0.5). 화면의 이 비율 이상이 바뀌면
-  슬라이드 전환으로 판단합니다. 값을 낮추면 더 민감하게 감지합니다.
-- `debounce`: 화면 전환을 "확정"하는 데 필요한 연속 안정 프레임 수(기본 3). `frame_interval_sec` × `debounce`초
-  동안 새 화면이 안정적으로 유지되어야 전환으로 확정됩니다. 값을 낮추면 전환을 더 빨리 잡아내지만
-  커서 움직임이나 전환 애니메이션 같은 순간적인 노이즈에 오탐할 수 있습니다.
-- `min_slide_duration_sec`: 병합 그룹의 누적 구간이 이 시간(초, 기본 15) 이상이면 발화 분량이 적어도
-  발행 대상으로 간주합니다.
-- `min_transcript_chars`: 병합 그룹의 전사 글자 수가 이 값(기본 30) 미만이면 "내용 있음"으로 보지 않고
-  다음 화면과 계속 병합합니다.
-- `substantial_chars`: 누적 구간의 지속 시간과 무관하게, 전사 글자 수가 이 값(기본 120) 이상이면
-  즉시 발행 대상으로 간주합니다.
-- `max_merged_segments`: 병합 그룹에 담기는 세그먼트 수가 이 값(기본 6)을 넘으면 내용 유무와 무관하게
-  강제로 발행합니다.
-- `max_merged_duration_sec`: 병합 그룹의 누적 구간이 이 시간(초, 기본 300)을 넘으면 강제로 발행합니다.
-- `max_images_per_section`: 한 섹션에 첨부하는 최대 이미지 장수(기본 4). 유사한 프레임은 먼저 중복
-  제거된 뒤, 이 상한 내에서 고르게 샘플링됩니다.
-- `audio_flush_timeout_sec`: 세그먼트 처리 시 오디오 캡처가 끝나기를 기다리는 최대 시간(초, 기본 5).
-- `idle_flush_sec`: 새 세그먼트가 이 시간(초, 기본 90) 동안 들어오지 않으면, 대기 중인 병합 그룹을
-  그대로 강제 발행합니다. 라이브 시청자가 화면 전환 없이 오래 기다리는 상황을 방지합니다.
+나머지 항목은 기본값을 사용합니다. 전체 설정 예시는 `config.json.example`에 있습니다.
 
-개발 중(소스 실행)에는 `config.json`을 프로젝트 루트(`yln/` 폴더의 상위 디렉터리)에 두면 됩니다.
-Windows exe로 빌드한 뒤에는 실행 파일(`YoutubeLiveNotion.exe`)과 같은 폴더에 두어야 합니다.
+### 3. 로그인하고 기록 시작
 
-## 개발 환경에서 실행하기 (macOS/Linux/Windows 공통)
+1. `YoutubeLiveNotion.exe`를 실행합니다.
+2. **Codex 로그인**을 눌러 열린 콘솔에서 계정 인증을 완료합니다. 이미 해당 PC에서 로그인했다면 기존 인증을 사용합니다.
+3. 요약 AI에서 **Codex**를 선택합니다. 로그인 버튼과 AI 선택은 별개입니다.
+4. **유튜브 URL**을 입력하고, 필요하면 **강의 주제 키워드**와 **기록 시작** 위치를 지정합니다.
+5. **시작**을 누릅니다. Whisper 모델이 없으면 처음 전사할 때 `models/` 폴더에 다운로드합니다.
+6. 기록을 마치려면 **종료**를 누르고, 상태창의 완료 메시지를 기다린 뒤 Notion 결과를 확인합니다.
+
+기록 중에는 요약 AI를 바꿀 수 없습니다. 종료 후에도 남은 전사·요약·업로드가 진행되므로 앱을 바로 닫지 마세요. 다운로드 중 종료 요청은 다운로드를 즉시 취소하지 않을 수 있습니다.
+
+## 입력 영상과 처리 방식
+
+| 입력                    | 처리 방식                                      | 시작 위치                    |
+| ----------------------- | ---------------------------------------------- | ---------------------------- |
+| 업로드된 녹화 영상(VOD) | 영상을 전체 다운로드한 뒤 프레임과 음성을 분석 | 처음부터 또는 지정 시간부터  |
+| 진행 중인 라이브        | 현재 스트림을 수신하면서 분석                  | 앱이 수신을 시작한 이후 구간 |
+
+VOD 시작 시간은 `HH:MM:SS`, `MM:SS`, 정수 초 형식을 받습니다. 지정 시간부터 분석해도 영상은 전체 다운로드하며, Notion에는 원본 영상 기준의 시간이 표시됩니다. 라이브에서는 지정 시간을 무시하고 과거 방송분을 소급해서 가져오지 않습니다.
+
+라이브는 수신이 중단될 수 있으며 자동 재연결·이어받기를 지원하지 않습니다. 전체 강의를 기록할 때는 업로드된 녹화 영상을 사용하세요.
+
+```text
+유튜브 URL
+  → yt-dlp: 스트림 정보 조회 / VOD 다운로드
+  → ffmpeg: 화면 프레임 + 음성 추출
+  → 슬라이드 변화 감지
+  → faster-whisper: 구간별 음성 전사
+  → 짧은 구간 병합 + AI 요약
+  → Notion: 이미지와 요약 기록
+  → 종료 시 전체 요약 + 스크립트 하위 페이지
+```
+
+요약은 **음성 전사문을 기반**으로 합니다. 유튜브 자막이나 슬라이드 이미지의 OCR·시각 분석은 사용하지 않으며, 이미지는 Notion에 참고 자료로 첨부합니다. 따라서 말로 설명하지 않은 슬라이드 내용은 요약에 반영되지 않을 수 있습니다.
+
+## Notion 결과물
+
+설정한 부모 페이지 아래에 강의별 페이지가 생성됩니다.
+
+```text
+강의 제목
+├─ Slide 1 · 구간 시간
+│  ├─ 슬라이드 이미지
+│  └─ 한국어 요약
+├─ Slide 2 · 구간 시간
+│  ├─ 슬라이드 이미지 여러 장
+│  └─ 병합한 구간의 요약
+├─ 전체 요약
+└─ 전체 스크립트 — 강의 제목
+   └─ 처리한 구간별 시간과 Whisper 전사문
+```
+
+화면 전환마다 별도 섹션이 생기지는 않습니다. 내용이 적은 구간은 합치고, 발화가 없는 구간은 이미지가 앞선 내용 뒤에 추가될 수 있습니다. 앱의 업로드 수는 감지한 화면 전환 수와 다를 수 있습니다.
+
+전체 스크립트는 **이번 실행에서 처리한 구간**의 전사문입니다. 지정 시점 이전이나 수신하지 못한 라이브 구간은 포함하지 않습니다. 전사·요약 오류가 있을 수 있으므로 필요한 내용은 원본 영상과 함께 확인하세요.
+
+## 요약 백엔드
+
+| `summarizer_backend` | 사용 방식                            | 준비할 것               | 관련 설정                               |
+| -------------------- | ------------------------------------ | ----------------------- | --------------------------------------- |
+| `codex`              | Codex CLI의 기존 인증으로 요약       | Codex CLI 로그인        | `codex_model`, `codex_reasoning_effort` |
+| `claude_code`        | Claude Code CLI의 기존 인증으로 요약 | Claude Code 설치·로그인 | `claude_code_model`                     |
+| `gemini`             | Gemini API 호출                      | `gemini_api_key`        | `gemini_model`                          |
+| `anthropic`          | Anthropic API 호출                   | `anthropic_api_key`     | API 키 설정                             |
+
+- **Codex / Claude Code**: 앱의 토글로 선택합니다. 두 로그인 버튼은 선택한 AI와 관계없이 표시됩니다.
+- **Gemini / Anthropic**: 앱을 닫고 `config.json`의 백엔드와 API 키를 수정한 뒤 다시 실행합니다. 키는 각각 [Google AI Studio](https://aistudio.google.com/apikey), [Anthropic Console](https://console.anthropic.com)에서 준비합니다.
+- Windows의 **Claude 로그인** 버튼은 CLI가 없으면 설치 과정을 안내하고, 설치되어 있으면 로그인 콘솔을 엽니다.
+- CLI 백엔드는 앱 설정에 별도 요약 API 키를 요구하지 않습니다. 모델 접근과 사용량 한도는 로그인한 계정에 따릅니다.
+
+Codex 요약은 임시 작업 폴더에서 비대화형 `exec`로 실행합니다. 전사문을 표준입력으로 전달하고 최종 응답만 읽으며, 개인 설정의 MCP 연결은 불러오지 않습니다. 호출당 제한 시간은 180초이고, 실패 시 최대 두 번 더 시도합니다.
+
+## 설정
+
+소스 실행에서는 **프로젝트 루트**, Windows 배포본에서는 **실행 파일과 같은 폴더**의 `config.json`을 읽습니다. 앱의 AI 토글 외 설정은 앱을 닫은 상태에서 수정하세요.
+
+### 계정과 모델
+
+| 항목                     | 기본값                | 설명                                                                                   |
+| ------------------------ | --------------------- | -------------------------------------------------------------------------------------- |
+| `notion_token`           | 필수                  | Notion Integration 토큰                                                                |
+| `notion_parent_page_id`  | 필수                  | 강의 페이지를 생성할 부모 페이지 ID                                                    |
+| `summarizer_backend`     | 예시 파일: `codex`    | `codex`, `claude_code`, `gemini`, `anthropic`                                          |
+| `codex_model`            | `gpt-5.6-luna`        | Codex 요약 모델                                                                        |
+| `codex_reasoning_effort` | `low`                 | 앱 허용값: `low`, `medium`, `high`, `xhigh`, `max`. 모델에서도 해당 수준을 지원해야 함 |
+| `claude_code_model`      | `haiku`               | Claude Code에 전달할 모델명                                                            |
+| `gemini_api_key`         | 빈 문자열             | Gemini 선택 시 필수                                                                    |
+| `gemini_model`           | `gemini-flash-latest` | Gemini 요약 모델                                                                       |
+| `anthropic_api_key`      | 빈 문자열             | Anthropic 선택 시 필수                                                                 |
+| `whisper_model`          | `medium`              | 로컬 전사 모델. 예: `tiny`, `base`, `small`, `medium`, `large-v3`                      |
+| `whisper_device`         | `auto`                | `auto`, `cpu`, `cuda`                                                                  |
+
+새 예시 설정은 Codex를 선택합니다. 단, 기존 파일을 직접 불러올 때 `summarizer_backend`가 없거나 비어 있으면 Gemini로 해석하므로 백엔드를 명시하세요.
+
+Whisper는 로컬 모델 캐시를 먼저 사용하고, 캐시가 없을 때 다운로드합니다. `auto`는 장치를 자동 선택하며, CUDA 라이브러리 오류가 감지되면 CPU로 전환합니다. CPU 처리 속도가 부족하면 더 작은 모델로 조정할 수 있습니다.
+
+### 캡처와 영상
+
+| 항목                      | 기본값 | 설명                                                                         |
+| ------------------------- | ------ | ---------------------------------------------------------------------------- |
+| `frame_interval_sec`      | `2.0`  | 프레임 추출 간격(초)                                                         |
+| `change_ratio`            | `0.5`  | 화면 변화 비율 기준. 낮출수록 민감하며, 실제 적용 범위는 `0.05`~`0.95`       |
+| `debounce`                | `3`    | 새 화면이 안정적으로 유지되어야 하는 연속 프레임 수                          |
+| `audio_flush_timeout_sec` | `5.0`  | 구간 처리 전 오디오가 기록되기를 기다리는 최대 시간(초)                      |
+| `stall_timeout_sec`       | `60.0` | 라이브 오디오 수신이 멈췄다고 판단하는 시간(초). `0`이면 감시 비활성화       |
+| `vod_max_height`          | `1080` | VOD 다운로드 요청 시 최대 영상 높이(px). 실제 화질은 제공 포맷에 따라 달라짐 |
+
+### 구간 병합과 발행
+
+| 항목                      | 기본값  | 설명                                                                      |
+| ------------------------- | ------- | ------------------------------------------------------------------------- |
+| `min_transcript_chars`    | `30`    | 내용이 있는 구간으로 판단할 최소 전사 글자 수                             |
+| `min_slide_duration_sec`  | `15.0`  | 최소 전사 분량을 충족한 그룹을 발행 대상으로 삼는 누적 길이(초)           |
+| `substantial_chars`       | `120`   | 최소 전사 분량을 충족하면 구간 길이와 관계없이 발행 대상으로 삼는 글자 수 |
+| `max_merged_segments`     | `6`     | 병합 구간 수가 이 값에 도달하면 강제 처리                                 |
+| `max_merged_duration_sec` | `300.0` | 병합 구간 길이가 이 값에 도달하면 강제 처리(초)                           |
+| `max_images_per_section`  | `4`     | 한 섹션의 최대 이미지 수. 유사 이미지 제거 후 고르게 선택                 |
+| `idle_flush_sec`          | `90.0`  | 새 구간이 들어오지 않을 때 대기 중인 그룹을 강제 처리하기까지의 시간(초)  |
+
+기본 설정에서는 **전사 30자 이상이면서 구간 15초 이상**, 또는 **전사 120자 이상**이면 요약을 시도합니다. 요약이 유효하지 않으면 다음 구간과 더 합칠 수 있고, 강제 처리 시에도 발화가 없으면 이미지 위주로 기록합니다.
+
+## Windows 빌드
+
+빌드하는 PC에는 **Python 3.11 이상**이 필요합니다. 실행 중인 앱을 닫고 Windows 프로젝트 폴더에서 실행하세요.
+
+```powershell
+.\build.bat
+```
+
+빌드 스크립트는 가상환경과 의존성을 준비하고 PyInstaller로 앱을 묶습니다.
+
+- `requirements.txt`에 고정한 **Codex CLI 0.154.0**과 보조 파일을 동봉하고, 배포 폴더의 실행 파일로 `--version`을 검사합니다.
+- ffmpeg와 Deno를 다운로드해 배포 폴더에 준비합니다.
+- 기존 설정과 선택한 요약 AI를 복원하고, 없는 Codex 설정 항목만 기본값으로 채웁니다.
+- 기존 Whisper 모델 캐시는 빌드 전에 옮겨두었다가 성공 후 복원합니다.
+
+설정 보존은 `config.build-pending.json` → 기존 배포 폴더의 `config.json` → 프로젝트 루트의 `config.json` → `config.json.example` 순서입니다. 실패한 빌드의 대기 파일이 있으면 그것을 우선 복구하며, 복원한 원본 설정은 프로젝트 루트의 `config.build-backup.json`에 남습니다.
+
+### 다른 Windows PC로 옮기기
+
+`dist\YoutubeLiveNotion` 폴더 전체를 복사합니다.
+
+```text
+YoutubeLiveNotion/
+├─ YoutubeLiveNotion.exe
+├─ config.json
+├─ config.json.example
+├─ ffmpeg.exe
+├─ deno.exe
+├─ _internal/
+│  └─ codex_cli_bin/        # Codex 실행 파일과 보조 파일
+└─ models/                 # Whisper 최초 사용 후 생성
+```
+
+`models/`까지 옮기면 받은 모델 캐시를 재사용합니다. Codex 인증은 배포 폴더에 포함되지 않으므로 새 PC에서는 로그인해야 합니다. Claude Code를 선택했다면 그 PC에도 CLI 설치와 로그인이 필요합니다.
+
+## 소스에서 실행
+
+Python 3.11 이상과 Tkinter를 사용할 수 있는 환경이 필요합니다. macOS/Linux에서는 ffmpeg를 PATH에 준비하세요. Deno가 있으면 VOD의 고화질 포맷 추출에 사용할 수 있습니다.
+
+이미 `config.json`이 있다면 아래 명령의 복사 단계를 건너뛰어 기존 설정을 유지하세요.
+
+**macOS / Linux**
 
 ```bash
 python3 -m venv .venv
-source .venv/bin/activate  # Windows는 .venv\Scripts\activate
-pip install -r requirements.txt
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+cp config.json.example config.json
+# config.json의 Notion 값을 입력한 뒤 실행
 python -m yln
 ```
 
-## Windows exe 빌드하기
+**Windows PowerShell**
 
-Windows 환경에서:
-
-```bat
-build.bat
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+Copy-Item config.json.example config.json
+# config.json의 Notion 값을 입력한 뒤 실행
+python -m yln
 ```
 
-이 스크립트는 가상환경을 만들고, 의존성·고정 버전 Codex 런타임·PyInstaller를 설치한 뒤
-`youtube-live-notion.spec`으로 빌드합니다. Codex 실행 파일과 보조 파일을 함께 동봉하고,
-빌드된 Codex의 `--version` 실행이 실패하면 빌드를 중단합니다. ffmpeg·deno도 배포 폴더에 준비합니다.
-기존 설정과 요약 AI 선택은 보존하고 `config.json.example`도 함께 복사합니다.
+Windows에서는 의존성 설치 시 Codex 런타임도 설치됩니다. macOS/Linux에서 Codex를 사용하려면 별도로 CLI를 설치하고 터미널에서 `codex login`을 완료해야 합니다. Claude Code도 설치한 CLI의 인증을 사용합니다.
 
-앱의 토글에서 사용할 AI를 선택하고 해당 로그인 버튼으로 인증하세요. 처음 설정한다면 생성된 `config.json`의
-Notion 값을 채운 뒤 `YoutubeLiveNotion.exe`를 실행하세요. (ffmpeg 동봉에 실패했거나 다른 버전을
-쓰고 싶다면, 앱이 첫 실행 시 자동으로 다운로드를 시도하거나, 위 "ffmpeg 자동 설치" 순서대로
-직접 넣어주셔도 됩니다.)
+테스트는 의존성을 설치한 가상환경에서 실행합니다.
 
-## 포터블 폴더로 다른 PC에서 실행하기
-
-빌드된 `dist\YoutubeLiveNotion` 폴더에는 ffmpeg와 Codex 런타임까지 포함됩니다.
-아래 폴더를 통째로 복사하면 새 PC에 별도 프로그램 설치 없이 실행할 수 있습니다.
-Codex 계정은 앱의 **Codex 로그인** 버튼으로 새 PC에서 최초 한 번 로그인하세요.
-
-```
-YoutubeLiveNotion/
-  YoutubeLiveNotion.exe
-  ffmpeg.exe
-  config.json
-  _internal/codex_cli_bin/  <- 고정 버전 Codex와 보조 실행 파일
-  models/            <- Whisper 모델 캐시 (첫 실행 후 자동 생성됨)
-  ...
+```bash
+python -m pip install pytest
+python -m pytest -q
 ```
 
-Whisper 모델은 사용자 홈 폴더가 아니라 실행 파일과 같은 위치의 `models/` 폴더에 다운로드되므로,
-한 번 모델을 받아둔 폴더를 복사하면 다른 PC에서는 재다운로드 없이 바로 동작합니다. USB나
-네트워크 드라이브로 폴더째 옮겨도 무방합니다.
+## 문제 해결과 기록 범위
 
-## 사용법
+| 증상                          | 확인할 내용                                                             |
+| ----------------------------- | ----------------------------------------------------------------------- |
+| 설정 파일을 찾지 못함         | 소스는 프로젝트 루트, 배포본은 exe 옆에 `config.json`이 있는지 확인     |
+| Notion 페이지 생성 실패       | 토큰, 부모 페이지 ID, 해당 페이지의 Integration 연결 확인               |
+| Codex 인증 오류               | **Codex 로그인**에서 인증 완료 후 다시 시작                             |
+| 배포본의 Codex 실행 파일 오류 | 전역 CLI 설치 대신 소스에서 `build.bat`으로 다시 빌드                   |
+| VOD 다운로드 실패·낮은 화질   | 영상 접근 가능 여부와 Deno 설치·동봉 여부 확인                          |
+| 라이브가 중간에 멈춤          | 상태창 오류 확인. 자동 재연결은 없으며 업로드된 녹화 영상으로 다시 기록 |
+| 첫 전사가 오래 걸림           | 상태창의 모델 다운로드·로딩 확인. 이후에는 `models/` 캐시 사용          |
+| 슬라이드가 너무 잘게 나뉨     | `debounce`나 `min_slide_duration_sec` 조정                              |
+| 슬라이드 전환을 놓침          | `change_ratio`나 `debounce`를 낮춰 감지 조건 조정                       |
+| API 요청 한도 오류            | 해당 서비스의 사용량 확인. 자동 재시도 후에도 실패하면 상태창 오류 확인 |
 
-1. 앱 실행 후 **유튜브 URL** 칸에 라이브 방송 또는 VOD 링크를 입력합니다.
-2. **강의 주제 키워드** 칸에 강의 관련 기술 키워드(예: `Java, Spring, JWT`)를 입력하면
-   음성 인식 정확도와 요약 품질이 향상됩니다. (선택 사항)
-3. **시작** 버튼을 누르면 캡처가 시작되고, 슬라이드가 감지될 때마다 상태 영역에 진행 상황이 표시됩니다.
-4. 강의가 끝나면 **종료** 버튼을 눌러 마지막 슬라이드와 전체 요약을 Notion에 기록하고 세션을 마칩니다.
-   이때 Notion 페이지 하단에는 강의 전체 요약과 함께, 모든 슬라이드의 Whisper 원문 스크립트를 담은
-   "📜 전체 스크립트" 하위 페이지가 함께 생성됩니다. 무료 요약 API가 부실하게 답하거나 실패한 경우에도
-   원문 스크립트로 내용을 확인할 수 있는 백업 역할을 합니다.
+Windows에서 ffmpeg는 앱 폴더 → `bin/` → PATH 순서로 찾고, 없으면 자동 다운로드를 시도합니다. macOS/Linux에서는 직접 설치해야 합니다.
 
-## 주의사항
+개별 구간 처리에 실패해도 다음 구간은 계속 처리하지만, 실패한 업로드를 나중에 자동 복구하지는 않습니다. 전사문은 종료 전까지 메모리에 보관하며 별도 로컬 텍스트 파일로 저장하지 않습니다. 최종 요약 생성·기록이 실패하면 스크립트 하위 페이지도 생성되지 않을 수 있고, 스크립트 업로드 실패 후에도 완료 메시지가 표시될 수 있으므로 **상태창의 오류와 Notion 결과를 함께 확인하세요.**
 
-- Whisper `medium` 모델은 첫 실행 시 자동으로 다운로드되며 용량이 약 1.5GB입니다. 저사양 PC에서는
-  `small` 또는 `base` 모델 사용을 권장합니다.
-- 녹화는 항상 **시작 버튼을 누른 시점부터** 시작되며, 라이브 방송의 과거 구간은 가져오지 않습니다.
-- 세션 중 개별 슬라이드 처리(음성 인식/요약/업로드)가 실패해도 세션 전체가 중단되지 않고 계속 진행됩니다.
-  단, 스트림 연결이나 Notion 페이지 생성 자체가 실패하면 세션이 종료됩니다.
-- Gemini 무료 티어는 요청 빈도 제한이 있습니다. 슬라이드 전환이 매우 잦은 강의라면 한도에 걸릴 수
-  있으며, 이 경우 앱이 자동으로 재시도합니다. 반복적으로 실패한다면 `frame_interval_sec`을 늘리거나
-  `summarizer_backend`를 `"anthropic"`으로 전환하는 것도 방법입니다.
-- 전체 스크립트 하위 페이지 기록이 실패해도(예: 네트워크 오류) 이미 기록된 전체 요약은 유지되며,
-  세션은 "[오류]" 메시지와 함께 정상적으로 "완료" 상태로 마무리됩니다.
+### 초기화와 로그아웃
+
+앱의 **초기화**는 Claude 로그인 정보·CLI 프로그램·`~/.claude` 전체, 앱의 `config.json`, 녹화 임시 파일을 삭제하는 기능입니다. 다른 Claude 작업의 설정과 대화 기록도 삭제 대상입니다.
+
+Codex 로그인, Whisper 모델 캐시, 빌드 설정 백업은 초기화 대상에 포함되지 않습니다. Windows 배포본에서 Codex를 로그아웃하려면 배포 폴더의 PowerShell에서 실행하세요.
+
+```powershell
+.\_internal\codex_cli_bin\bin\codex.exe logout
+```
